@@ -1,85 +1,103 @@
 import streamlit as st
+import requests
 import pandas as pd
 
 # --- KONFİGÜRASYON ---
-st.set_page_config(page_title="Emlak Yatırım Hesap Uygulaması", page_icon="🏠", layout="wide")
+st.set_page_config(page_title="Emlak Vizyoner: Profesyonel Yatırım Analizi", layout="wide")
 
-# --- STİL ---
-st.markdown("""
-    <style>
-    .stMetric { background-color: #f0f2f6; padding: 15px; border-radius: 10px; }
-    .stButton>button { width: 100%; background-color: #007BFF; color: white; font-weight: bold; }
-    </style>
-    """, unsafe_allow_html=True)
+# --- VERİ ÇEKME (İller & İlçeler) ---
+@st.cache_data
+def turkiye_verisi_yukle():
+    url = "https://raw.githubusercontent.com/fatih/turkiye-iller-ilceler/master/data/data.json"
+    response = requests.get(url)
+    return response.json() if response.status_code == 200 else {}
 
-# --- VERİ SETİ ---
-sehir_verileri = {
-    "Adana (Çukurova)": 15, "Mersin (Yenişehir)": 16, "İstanbul": 21, 
-    "Ankara": 18, "İzmir": 20, "Antalya": 17, "Bursa": 19, "Diğer": 18
-}
+data = turkiye_verisi_yukle()
 
-# --- BAŞLIK ---
-st.title("🏛️ Emlak Yatırım Hesap Uygulaması")
-st.markdown("### *Yatırımın Duygusu Olmaz, Matematiği Olur.*")
-
-# --- GİRDİ PANELİ ---
+# --- ARAYÜZ: YAN PANEL ---
 with st.sidebar:
-    st.header("📍 İlan Detayları")
-    sehir = st.selectbox("Şehir/Bölge Seçiniz:", list(sehir_verileri.keys()))
-    fiyat = st.number_input("Satış Fiyatı (TL)", min_value=0, value=6000000, step=50000)
-    kira = st.number_input("Aylık Kira Getirisi (TL)", min_value=1, value=30000, step=1000)
+    st.header("📍 Konum & Finans")
+    il_isimleri = [item['name'] for item in data]
+    secilen_il = st.selectbox("İl Seçiniz:", il_isimleri)
+    ilce_isimleri = [ilce['name'] for ilce in next(i for i in data if i["name"] == secilen_il)['towns']]
+    secilen_ilce = st.selectbox("İlçe Seçiniz:", ilce_isimleri)
     
     st.divider()
-    st.header("📉 Giderler & Vergi")
-    aidat = st.number_input("Aylık Aidat/Bakım (TL)", value=1000)
-    vergi_orani = st.slider("Gelir Vergisi Tahmini (%)", 0, 35, 15)
+    fiyat = st.number_input("Gayrimenkul Fiyatı (TL):", min_value=100000, value=6000000)
+    kira = st.number_input("Başlangıç Kirası (TL):", min_value=1000, value=30000)
+    
+    st.divider()
+    st.header("📈 Ekonomik Beklentiler")
+    senaryo = st.radio("Enflasyon Senaryosu:", ["Dezenflasyon (Normalleşme - %33.88)", "Yüksek Enflasyon (%55)"])
+    artis_orani = 33.88 if "Dezenflasyon" in senaryo else 55.00
 
-# --- ANALİZ MOTORU ---
-brut_carpan_ay = fiyat / kira
-brut_carpan_yil = brut_carpan_ay / 12
-net_aylik_gelir = kira - aidat - (kira * vergi_orani / 100)
-net_carpan_yil = fiyat / (net_aylik_gelir * 12)
+    st.divider()
+    st.header("🏦 Kredi & Alternatif")
+    kredi_taksit = st.number_input("Aylık Kredi Taksiti (0 ise nakit):", value=0)
+    alternatif_getiri = st.slider("Alternatif Yıllık Faiz/Getiri (%)", 10, 80, 45)
 
-# --- ANA EKRAN: METRİKLER ---
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Brüt Amortisman", f"{brut_carpan_yil:.1f} Yıl")
-c2.metric("Net Amortisman", f"{net_carpan_yil:.1f} Yıl")
-c3.metric("Yıllık Verim (Brüt)", f"%{(12/brut_carpan_ay)*100:.1f}")
-c4.metric("Net Aylık Akış", f"{net_aylik_gelir:,.0f} TL")
+# --- ANA EKRAN ---
+st.title("🏙️ Emlak Vizyoner: Profesyonel Analiz Paneli")
+st.markdown("---")
 
-st.divider()
+if st.button("KAPSAMLI FİZİBİLİTE RAPORUNU ÇALIŞTIR"):
+    # Matematiksel Modeller
+    brut_carpan = fiyat / kira
+    yil_amortisman = brut_carpan / 12
+    net_aylik_gelir = kira * 0.85 # Vergi ve bakım düşülmüş
+    nakit_akisi = net_aylik_gelir - kredi_taksit
+    
+    # 1. TEMEL METRİKLER
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Kira Çarpanı", f"{brut_carpan:.0f} Ay")
+    col2.metric("Amortisman", f"{yil_amortisman:.1f} Yıl")
+    col3.metric("Net Nakit Akışı", f"{nakit_akisi:,.0f} TL/Ay")
+    col4.metric("Yıllık Net Verim", f"%{(net_aylik_gelir*12/fiyat)*100:.2f}")
 
-# --- 🚦 5 DAKİKA KURALI & PAZARLIK ROBOTU ---
-l_col, r_col = st.columns(2)
+    # 2. PROFESYONEL ANALİZ (ROI VE KIYASLAMA)
+    st.divider()
+    st.subheader("🏢 Yatırım Verimlilik Analizi")
+    c_left, c_right = st.columns(2)
+    
+    with c_left:
+        st.write("### ⚖️ Alternatif Kıyaslama")
+        mülk_verim = (net_aylik_gelir * 12 / fiyat) * 100
+        if mülk_verim < (alternatif_getiri / 2):
+            st.error(f"⚠️ Kira verimi (%{mülk_verim:.1f}), alternatif getirinin (%{alternatif_getiri}) çok altında. Bu yatırımın kârlı olması için mülk değer artışının çok yüksek olması gerekir.")
+        else:
+            st.success(f"✅ Kira verimi (%{mülk_verim:.1f}) piyasa koşullarına göre dengeli.")
 
-with l_col:
-    st.subheader("🚦 Yatırım Kararı (5 Dakika Kuralı)")
-    if brut_carpan_ay < 144:
-        st.success("🟢 MÜKEMMEL YATIRIM: Görseldeki kriterlere göre en üst segment.")
-    elif 144 <= brut_carpan_ay < 168:
-        st.warning("🟡 İYİ YATIRIM: Makul ve güvenli bir liman.")
-    elif 168 <= brut_carpan_ay < 220:
-        st.info("🟠 ORTA YATIRIM: Sınırda. Pazarlık şart.")
-    else:
-        st.error("🔴 RİSKLİ YATIRIM: Amortisman süresi çok uzun, nakit akışı zayıf.")
+    with c_right:
+        st.write("### 🏦 Finansman Durumu")
+        if kredi_taksit > 0:
+            if nakit_akisi > 0:
+                st.success(f"Yatırım Kendi Kredisini Ödüyor. Kalan: {nakit_akisi:,.0f} TL")
+            else:
+                st.error(f"Negatif Nakit Akışı! Aylık Cebinizden Çıkacak: {abs(nakit_akisi):,.0f} TL")
+        else:
+            st.info("Nakit alım yapıldı. Kredi yükü bulunmuyor.")
 
-with r_col:
-    st.subheader("🎯 Pazarlık Optimizasyonu")
-    hedef_yil = 14 # 'İyi' kategorisi için hedef
-    ideal_fiyat = kira * 12 * hedef_yil
+    # 3. GELECEK PROJEKSİYONU
+    st.divider()
+    st.subheader(f"🚀 10 Yıllık {senaryo} Projeksiyonu")
+    yillar = list(range(1, 11))
+    kira_list = [kira * ((1 + artis_orani/100) ** (y-1)) for y in yillar]
+    birikmis_gelir = []
+    toplam = 0
+    for k in kira_list:
+        toplam += k * 12
+        birikmis_gelir.append(toplam)
+
+    chart_df = pd.DataFrame({"Yıl": yillar, "Yıllık Kira (TL)": [k*12 for k in kira_list], "Kümülatif Kazanç": birikmis_gelir}).set_index("Yıl")
+    st.area_chart(chart_df["Yıllık Kira (TL)"])
+    
+
+    # 4. PAZARLIK ROBOTU (Kullanıcıya Özel Uyarı)
+    st.divider()
+    st.subheader("🎯 Stratejik Pazarlık Notu")
+    ideal_fiyat = kira * 144
     if fiyat > ideal_fiyat:
-        fark = fiyat - ideal_fiyat
-        st.error(f"Pazarlık Hedefi: -{fark:,.0f} TL")
-        st.write(f"Mülkü **{ideal_fiyat:,.0f} TL** seviyesine çekmelisiniz.")
+        st.warning(f"Görseldeki 'Çok İyi Yatırım' seviyesi için fiyat hedefi: **{ideal_fiyat:,.0f} TL**")
+        st.info(f"Pazarlık masasında **{fiyat - ideal_fiyat:,.0f} TL** indirim talep etmeniz önerilir.")
     else:
-        st.success("Fiyat zaten ideal yatırım seviyesinde!")
-
-# --- UYARI VE PROJEKSİYON ---
-st.divider()
-st.subheader("⚠️ Kritik Yatırımcı Notları")
-st.info(f"""
-- **Bölge Kıyaslaması:** {sehir} ortalaması {sehir_verileri[sehir]} yıl. Sizin yatırımınız {brut_carpan_yil:.1f} yıl. 
-- **Boş Kalma Riski:** Analiz 12 ay doluluk varsayar. Risk yönetimi için 11 ay üzerinden hesap yapmayı unutmayın.
-- **Enflasyon Etkisi:** Türkiye şartlarında kira artışları amortisman süresini kağıt üzerinde kısaltabilir ancak bakım maliyetlerini de artırır.
-""")
-
+        st.success("Fiyat, kira getirisine göre oldukça avantajlı seviyede!")
